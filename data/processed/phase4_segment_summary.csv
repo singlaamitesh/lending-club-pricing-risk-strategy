@@ -1,0 +1,7 @@
+segment,n_loans,total_loan_value,avg_interest_rate,avg_annual_income,avg_rate_sensitivity_proxy,avg_rate_percentile_in_grade,default_rate_pct,realized_margin
+High Risk / High Value,333923,7152603850,20.33,80385.7,3.94,0.5,38.73,-227063970.78
+High Risk / Low Value,179643,1350687450,19.23,55111.02,10.18,0.5,27.93,-1940045.4
+Low Risk / High Value,432941,10042600950,9.31,107010.74,4.77,0.5,11.23,208268947.15
+Low Risk / Low Value,662936,5672263550,9.22,67725.36,9.84,0.5,10.42,163264049.72
+Medium Risk / High Value,337021,7293595025,14.22,89058.33,4.34,0.52,25.08,10299688.28
+Medium Risk / Low Value,312527,2472268475,14.06,58650.34,9.83,0.48,20.35,35367066.68
