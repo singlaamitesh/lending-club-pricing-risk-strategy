@@ -1,5 +1,6 @@
 notes/
 .obsidian/
+.claude/
 data/raw/
 data/loans.db
 __pycache__/
