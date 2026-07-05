@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segment-Based Pricing &amp; Risk Strategy — Lending Portfolio Analytics</title>
+<style>
+  :root {
+    --surface-1: #fcfcfb;
+    --page-plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6; /* blue */
+    --series-2: #1baf7a; /* aqua */
+    --series-6: #e34948; /* red */
+    --good-text: #006300;
+    --neutral-mid: #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1: #1a1a19;
+      --page-plane: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #199e70;
+      --series-6: #e66767;
+      --good-text: #0ca30c;
+      --neutral-mid: #383835;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface-1: #1a1a19;
+    --page-plane: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5;
+    --series-2: #199e70;
+    --series-6: #e66767;
+    --good-text: #0ca30c;
+    --neutral-mid: #383835;
+  }
+  :root[data-theme="light"] {
+    --surface-1: #fcfcfb;
+    --page-plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-2: #1baf7a;
+    --series-6: #e34948;
+    --good-text: #006300;
+    --neutral-mid: #f0efec;
+  }
+
+  .viz-root {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+    padding: 32px clamp(16px, 4vw, 48px) 64px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .viz-root * { box-sizing: border-box; }
+
+  .hdr h1 { font-size: 1.5rem; margin: 0 0 4px; text-wrap: balance; }
+  .hdr p { color: var(--text-secondary); margin: 0 0 28px; font-size: 0.95rem; max-width: 70ch; }
+  .hdr a { color: var(--series-1); text-decoration: none; }
+  .hdr a:hover { text-decoration: underline; }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin-bottom: 36px;
+  }
+  .stat-tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat-tile .label { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 6px; }
+  .stat-tile .value { font-size: 1.7rem; font-weight: 600; font-variant-numeric: proportional-nums; }
+  .stat-tile .delta { font-size: 0.82rem; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  .stat-tile .delta.critical { color: var(--series-6); }
+  .stat-tile .delta.good { color: var(--good-text); }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px 16px;
+    margin-bottom: 22px;
+  }
+  .card-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-hd h2 { font-size: 1.05rem; margin: 0; text-wrap: balance; }
+  .card-hd .sub { font-size: 0.82rem; color: var(--text-secondary); margin: 2px 0 14px; }
+  .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 720px) { .card-row { grid-template-columns: 1fr; } }
+
+  .toggle-btn {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .toggle-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+  .key-caption { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 10px; display: flex; gap: 16px; }
+  .key-caption .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-secondary); }
+  svg .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  svg .gridline { stroke: var(--gridline); stroke-width: 1; }
+  svg .val-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; }
+  svg .axis-label { fill: var(--text-muted); font-size: 11px; }
+
+  .bar-mark { transition: opacity 0.1s; cursor: pointer; }
+  .bar-mark:hover { opacity: 0.82; }
+
+  .table-wrap { overflow-x: auto; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 6px; }
+  .data-table th, .data-table td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--gridline); font-variant-numeric: tabular-nums; }
+  .data-table th:first-child, .data-table td:first-child { text-align: left; font-variant-numeric: normal; }
+  .data-table th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.02em; }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--page-plane);
+    font-size: 0.78rem;
+    padding: 7px 10px;
+    border-radius: 6px;
+    line-height: 1.5;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.08s;
+    max-width: 240px;
+  }
+  .tooltip .t-val { font-weight: 700; }
+  .tooltip .t-lbl { color: var(--text-muted); font-weight: 400; }
+
+  .heat-cell { cursor: pointer; }
+  .heat-cell rect { transition: opacity 0.1s; }
+  .heat-cell:hover rect { opacity: 0.85; }
+  .heat-label { font-size: 12px; text-anchor: middle; dominant-baseline: middle; }
+  .heat-sub { font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
+
+  footer { margin-top: 8px; font-size: 0.8rem; color: var(--text-muted); }
+  footer a { color: var(--series-1); }
+</style>
+</head>
+<body>
+
+<div class="viz-root" data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+
+  <div class="hdr">
+    <h1>Segment-Based Pricing &amp; Risk Strategy</h1>
+    <p>Lending portfolio analytics on 2,258,991 cleaned loan records — SQL analysis, hypothesis testing, quantile-based segmentation, a logistic regression default model, and a simulated A/B test.
+       Full methodology: <a href="https://github.com/singlaamitesh/lending-club-pricing-risk-strategy" target="_blank" rel="noopener">GitHub repo</a>.</p>
+  </div>
+
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <h2>Default Rate by Credit Grade</h2>
+        <div class="sub">Among completed loans (Fully Paid, Charged Off, Default) — grade order is risk-ordinal, A → G</div>
+      </div>
+      <button class="toggle-btn" data-target="tbl-grade">View as table</button>
+    </div>
+    <div id="chart-grade"></div>
+    <div class="table-wrap"><table class="data-table" id="tbl-grade" style="display:none"></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <h2>Cohort Trend by Issue Year</h2>
+        <div class="sub">Two separate charts, not a dual axis — the right chart shows why recent-year default rates (left) are censored/unreliable</div>
+      </div>
+      <button class="toggle-btn" data-target="tbl-cohort">View as table</button>
+    </div>
+    <div class="card-row">
+      <div>
+        <div class="key-caption"><span class="sw" style="background:var(--series-1)"></span>Default rate of completed loans</div>
+        <div id="chart-cohort-default"></div>
+      </div>
+      <div>
+        <div class="key-caption"><span class="sw" style="background:var(--series-2)"></span>% of cohort completed (censoring check)</div>
+        <div id="chart-cohort-completed"></div>
+      </div>
+    </div>
+    <div class="table-wrap"><table class="data-table" id="tbl-cohort" style="display:none"></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <h2>Realized Margin by Grade</h2>
+        <div class="sub">Actual interest collected minus actual unrecovered principal loss (real $, not estimated)</div>
+      </div>
+      <button class="toggle-btn" data-target="tbl-margin">View as table</button>
+    </div>
+    <div class="key-caption"><span class="sw" style="background:var(--series-1)"></span>Profit &nbsp; <span class="sw" style="background:var(--series-6)"></span>Loss</div>
+    <div id="chart-margin"></div>
+    <div class="table-wrap"><table class="data-table" id="tbl-margin" style="display:none"></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <h2>Segment Summary — Risk × Value</h2>
+        <div class="sub">Realized margin by segment; cell shading = magnitude, blue = profit / red = loss</div>
+      </div>
+      <button class="toggle-btn" data-target="tbl-segment">View as table</button>
+    </div>
+    <div id="chart-segment"></div>
+    <div class="table-wrap"><table class="data-table" id="tbl-segment" style="display:none"></table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      <div>
+        <h2>Default Model — Feature Importance</h2>
+        <div class="sub">Standardized logistic regression coefficients, top 10 by magnitude</div>
+      </div>
+      <button class="toggle-btn" data-target="tbl-feat">View as table</button>
+    </div>
+    <div class="key-caption"><span class="sw" style="background:var(--series-6)"></span>Increases default risk &nbsp; <span class="sw" style="background:var(--series-1)"></span>Protective</div>
+    <div id="chart-feat"></div>
+    <div class="table-wrap"><table class="data-table" id="tbl-feat" style="display:none"></table></div>
+  </div>
+
+  <footer>
+    Notes, every hypothesis test, and concepts considered-but-not-used are documented in the project's <a href="https://github.com/singlaamitesh/lending-club-pricing-risk-strategy" target="_blank" rel="noopener">GitHub repo</a>.
+  </footer>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  const DATA = {
+    grade: [
+      { grade: "A", completed: 226315, defaulted: 13775, rate: 6.09 },
+      { grade: "B", completed: 380441, defaulted: 51162, rate: 13.45 },
+      { grade: "C", completed: 370449, defaulted: 83392, rate: 22.51 },
+      { grade: "D", completed: 195926, defaulted: 59632, rate: 30.44 },
+      { grade: "E", completed: 92088, defaulted: 35522, rate: 38.57 },
+      { grade: "F", completed: 31721, defaulted: 14354, rate: 45.25 },
+      { grade: "G", completed: 9139, defaulted: 4550, rate: 49.79 },
+    ],
+    cohort: [
+      { year: "2007", total: 599, completed: 599, defaults: 158, defaultRate: 26.38, pctCompleted: 100.0 },
+      { year: "2008", total: 2393, completed: 2393, defaults: 496, defaultRate: 20.73, pctCompleted: 100.0 },
+      { year: "2009", total: 5281, completed: 5281, defaults: 723, defaultRate: 13.69, pctCompleted: 100.0 },
+      { year: "2010", total: 12537, completed: 12537, defaults: 1757, defaultRate: 14.01, pctCompleted: 100.0 },
+      { year: "2011", total: 21721, completed: 21721, defaults: 3297, defaultRate: 15.18, pctCompleted: 100.0 },
+      { year: "2012", total: 53367, completed: 53367, defaults: 8644, defaultRate: 16.2, pctCompleted: 100.0 },
+      { year: "2013", total: 134814, completed: 134793, defaults: 21022, defaultRate: 15.6, pctCompleted: 99.98 },
+      { year: "2014", total: 235629, completed: 221468, defaults: 41056, defaultRate: 18.54, pctCompleted: 93.99 },
+      { year: "2015", total: 421092, completed: 373409, defaults: 75274, defaultRate: 20.16, pctCompleted: 88.68 },
+      { year: "2016", total: 434349, completed: 274679, defaults: 66668, defaultRate: 24.27, pctCompleted: 63.24 },
+      { year: "2017", total: 443084, completed: 158752, defaults: 36358, defaultRate: 22.9, pctCompleted: 35.83 },
+      { year: "2018", total: 494125, completed: 47080, defaults: 6934, defaultRate: 14.73, pctCompleted: 9.53 },
+    ],
+    margin: [
+      { grade: "A", interest: 268616545, loss: 110796607, margin: 157819938 },
+      { grade: "B", interest: 655996068, loss: 442283009, margin: 213713059 },
+      { grade: "C", interest: 903631433, loss: 857964678, margin: 45666755 },
+      { grade: "D", interest: 637172186, loss: 704591902, margin: -67419716 },
+      { grade: "E", interest: 420331356, loss: 503633307, margin: -83301951 },
+      { grade: "F", interest: 178515882, loss: 231089774, margin: -52573892 },
+      { grade: "G", interest: 53746004, loss: 79454462, margin: -25708457 },
+    ],
+    segment: {
+      rows: ["Low Risk", "Medium Risk", "High Risk"],
+      cols: ["Low Value", "High Value"],
+      cells: {
+        "Low Risk|Low Value": { n: 662936, defaultRate: 10.42, margin: 163264050 },
+        "Low Risk|High Value": { n: 432941, defaultRate: 11.23, margin: 208268947 },
+        "Medium Risk|Low Value": { n: 312527, defaultRate: 20.35, margin: 35367067 },
+        "Medium Risk|High Value": { n: 337021, defaultRate: 25.08, margin: 10299688 },
+        "High Risk|Low Value": { n: 179643, defaultRate: 27.93, margin: -1940045 },
+        "High Risk|High Value": { n: 333923, defaultRate: 38.73, margin: -227063971 },
+      },
+    },
+    feature: [
+      { name: "grade_G", coef: 2.3009 },
+      { name: "grade_F", coef: 2.1552 },
+      { name: "grade_E", coef: 1.9578 },
+      { name: "grade_D", coef: 1.7043 },
+      { name: "grade_C", coef: 1.3483 },
+      { name: "grade_B", coef: 0.8022 },
+      { name: "purpose_wedding", coef: -0.5851 },
+      { name: "purpose_small_business", coef: 0.4646 },
+      { name: "purpose_medical", coef: 0.2504 },
+      { name: "purpose_moving", coef: 0.2281 },
+    ],
+  };
+
+  const root = document.querySelector(".viz-root");
+  const cs = getComputedStyle(root);
+  const color = (name) => cs.getPropertyValue(name).trim();
+  const fmtMoney = (v) => {
+    const sign = v < 0 ? "-" : "";
+    const abs = Math.abs(v);
+    if (abs >= 1e6) return sign + "$" + (abs / 1e6).toFixed(1) + "M";
+    if (abs >= 1e3) return sign + "$" + (abs / 1e3).toFixed(0) + "K";
+    return sign + "$" + abs.toFixed(0);
+  };
+  const fmtNum = (v) => v.toLocaleString();
+  const hexToRgb = (hex) => {
+    const h = hex.replace("#", "");
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  };
+
+  const tooltip = document.getElementById("tooltip");
+  function showTip(evt, html) {
+    tooltip.innerHTML = html;
+    tooltip.style.opacity = "1";
+    positionTip(evt);
+  }
+  function positionTip(evt) {
+    const pad = 14;
+    let x = evt.clientX + pad, y = evt.clientY + pad;
+    const rect = tooltip.getBoundingClientRect();
+    if (x + rect.width > window.innerWidth) x = evt.clientX - rect.width - pad;
+    if (y + rect.height > window.innerHeight) y = evt.clientY - rect.height - pad;
+    tooltip.style.left = x + "px";
+    tooltip.style.top = y + "px";
+  }
+  function hideTip() { tooltip.style.opacity = "0"; }
+
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  // ---------- KPI row ----------
+  function renderKPIs() {
+    const tiles = [
+      { label: "Loans analyzed", value: "2.26M", delta: null },
+      { label: "High Risk / High Value realized loss", value: "−$227.1M", delta: "critical", arrow: "↓" },
+      { label: "Simulated pricing revenue lift", value: "+$629M", delta: "good", arrow: "↑" },
+      { label: "Default model recall", value: "69%", delta: null },
+    ];
+    const wrap = document.getElementById("kpiRow");
+    tiles.forEach((t) => {
+      const div = document.createElement("div");
+      div.className = "stat-tile";
+      div.innerHTML =
+        '<div class="label">' + t.label + "</div>" +
+        '<div class="value">' + t.value + "</div>" +
+        (t.delta ? '<div class="delta ' + t.delta + '">' + (t.arrow || "") + " " + (t.delta === "critical" ? "Loss segment" : "Directional estimate") + "</div>" : "");
+      wrap.appendChild(div);
+    });
+  }
+
+  // ---------- Bar chart (single-series, vertical) ----------
+  function renderBarChart(containerId, data, opts) {
+    const container = document.getElementById(containerId);
+    const width = container.clientWidth || 520;
+    const height = opts.height || 220;
+    const margin = { top: 12, right: 14, bottom: 28, left: 44 };
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+
+    const maxVal = Math.max(...data.map((d) => opts.value(d))) * 1.15;
+    const barSlot = plotW / data.length;
+    const barW = Math.min(24, barSlot * 0.6);
+
+    const svg = svgEl("svg", { width: "100%", height: height, viewBox: "0 0 " + width + " " + height });
+    const g = svgEl("g", { transform: "translate(" + margin.left + "," + margin.top + ")" });
+    svg.appendChild(g);
+
+    [0, 0.5, 1].forEach((frac) => {
+      const y = plotH - frac * plotH;
+      g.appendChild(svgEl("line", { class: "gridline", x1: 0, x2: plotW, y1: y, y2: y }));
+      const label = svgEl("text", { class: "axis-label", x: -8, y: y + 4, "text-anchor": "end" });
+      label.textContent = (maxVal * frac).toFixed(0) + "%";
+      g.appendChild(label);
+    });
+    g.appendChild(svgEl("line", { class: "axis-line", x1: 0, x2: plotW, y1: plotH, y2: plotH }));
+
+    data.forEach((d, i) => {
+      const val = opts.value(d);
+      const barH = (val / maxVal) * plotH;
+      const x = i * barSlot + (barSlot - barW) / 2;
+      const y = plotH - barH;
+
+      const rect = svgEl("rect", {
+        class: "bar-mark", x: x, y: y, width: barW, height: Math.max(barH, 2),
+        rx: 4, ry: 4, fill: opts.color || color("--series-1"),
+      });
+      rect.addEventListener("pointermove", (e) => showTip(e, opts.tooltip(d)));
+      rect.addEventListener("pointerleave", hideTip);
+      g.appendChild(rect);
+
+      const valLabel = svgEl("text", { class: "val-label", x: x + barW / 2, y: y - 6, "text-anchor": "middle" });
+      valLabel.textContent = val.toFixed(1) + "%";
+      g.appendChild(valLabel);
+
+      const catLabel = svgEl("text", { class: "axis-label", x: x + barW / 2, y: plotH + 18, "text-anchor": "middle" });
+      catLabel.textContent = opts.label(d);
+      g.appendChild(catLabel);
+    });
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+  }
+
+  // ---------- Line chart (single-series) ----------
+  function renderLineChart(containerId, data, opts) {
+    const container = document.getElementById(containerId);
+    const width = container.clientWidth || 400;
+    const height = opts.height || 190;
+    const margin = { top: 12, right: 10, bottom: 26, left: 40 };
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+
+    const vals = data.map((d) => opts.value(d));
+    const maxVal = Math.max(...vals) * 1.15;
+    const stepX = plotW / (data.length - 1);
+
+    const svg = svgEl("svg", { width: "100%", height: height, viewBox: "0 0 " + width + " " + height });
+    const g = svgEl("g", { transform: "translate(" + margin.left + "," + margin.top + ")" });
+    svg.appendChild(g);
+
+    [0, 0.5, 1].forEach((frac) => {
+      const y = plotH - frac * plotH;
+      g.appendChild(svgEl("line", { class: "gridline", x1: 0, x2: plotW, y1: y, y2: y }));
+      const label = svgEl("text", { class: "axis-label", x: -8, y: y + 4, "text-anchor": "end" });
+      label.textContent = (maxVal * frac).toFixed(0) + (opts.suffix || "");
+      g.appendChild(label);
+    });
+    g.appendChild(svgEl("line", { class: "axis-line", x1: 0, x2: plotW, y1: plotH, y2: plotH }));
+
+    const points = data.map((d, i) => [i * stepX, plotH - (opts.value(d) / maxVal) * plotH]);
+    const pathD = points.map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+    g.appendChild(svgEl("path", { d: pathD, fill: "none", stroke: opts.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+    points.forEach(([x, y], i) => {
+      const d = data[i];
+      const dot = svgEl("circle", { cx: x, cy: y, r: 4, fill: opts.color, stroke: color("--surface-1"), "stroke-width": 2 });
+      const hit = svgEl("circle", { cx: x, cy: y, r: 12, fill: "transparent", style: "cursor:pointer" });
+      hit.addEventListener("pointermove", (e) => showTip(e, opts.tooltip(d)));
+      hit.addEventListener("pointerleave", hideTip);
+      g.appendChild(dot);
+      g.appendChild(hit);
+      if (i === 0 || i === data.length - 1 || i % 3 === 0) {
+        const catLabel = svgEl("text", { class: "axis-label", x: x, y: plotH + 18, "text-anchor": "middle" });
+        catLabel.textContent = opts.label(d);
+        g.appendChild(catLabel);
+      }
+    });
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+  }
+
+  // ---------- Diverging bar chart (vertical, zero baseline) ----------
+  function renderDivergingBar(containerId, data, opts) {
+    const container = document.getElementById(containerId);
+    const width = container.clientWidth || 640;
+    const height = opts.height || 260;
+    const margin = { top: 12, right: 14, bottom: 28, left: 60 };
+    const plotW = width - margin.left - margin.right;
+    const plotH = height - margin.top - margin.bottom;
+
+    const vals = data.map((d) => opts.value(d));
+    const maxAbs = Math.max(...vals.map(Math.abs)) * 1.15;
+    const zeroY = plotH / 2;
+    const barSlot = plotW / data.length;
+    const barW = Math.min(24, barSlot * 0.55);
+
+    const svg = svgEl("svg", { width: "100%", height: height, viewBox: "0 0 " + width + " " + height });
+    const g = svgEl("g", { transform: "translate(" + margin.left + "," + margin.top + ")" });
+    svg.appendChild(g);
+
+    [-1, -0.5, 0, 0.5, 1].forEach((frac) => {
+      const y = zeroY - frac * zeroY;
+      g.appendChild(svgEl("line", { class: "gridline", x1: 0, x2: plotW, y1: y, y2: y }));
+      const label = svgEl("text", { class: "axis-label", x: -8, y: y + 4, "text-anchor": "end" });
+      label.textContent = opts.fmtAxis(frac * maxAbs);
+      g.appendChild(label);
+    });
+    g.appendChild(svgEl("line", { class: "axis-line", x1: 0, x2: plotW, y1: zeroY, y2: zeroY }));
+
+    data.forEach((d, i) => {
+      const val = opts.value(d);
+      const barH = (Math.abs(val) / maxAbs) * zeroY;
+      const x = i * barSlot + (barSlot - barW) / 2;
+      const isPos = val >= 0;
+      const y = isPos ? zeroY - barH : zeroY;
+      const fill = isPos ? color("--series-1") : color("--series-6");
+
+      const rect = svgEl("rect", {
+        class: "bar-mark", x: x, y: y, width: barW, height: Math.max(barH, 2),
+        rx: 4, ry: 4, fill: fill,
+      });
+      rect.addEventListener("pointermove", (e) => showTip(e, opts.tooltip(d)));
+      rect.addEventListener("pointerleave", hideTip);
+      g.appendChild(rect);
+
+      const labelY = isPos ? y - 6 : y + barH + 14;
+      const valLabel = svgEl("text", { class: "val-label", x: x + barW / 2, y: labelY, "text-anchor": "middle" });
+      valLabel.textContent = opts.fmtValue(val);
+      g.appendChild(valLabel);
+
+      const catLabel = svgEl("text", { class: "axis-label", x: x + barW / 2, y: plotH + 18, "text-anchor": "middle" });
+      catLabel.textContent = opts.label(d);
+      g.appendChild(catLabel);
+    });
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+  }
+
+  // ---------- Diverging horizontal bar (feature importance) ----------
+  function renderDivergingHBar(containerId, data, opts) {
+    const container = document.getElementById(containerId);
+    const width = container.clientWidth || 640;
+    const rowH = 28;
+    const height = data.length * rowH + 20;
+    const margin = { top: 10, right: 60, bottom: 10, left: 140 };
+    const plotW = width - margin.left - margin.right;
+
+    const maxAbs = Math.max(...data.map((d) => Math.abs(opts.value(d)))) * 1.1;
+    const zeroX = plotW / 2;
+
+    const svg = svgEl("svg", { width: "100%", height: height, viewBox: "0 0 " + width + " " + height });
+    const g = svgEl("g", { transform: "translate(" + margin.left + "," + margin.top + ")" });
+    svg.appendChild(g);
+
+    g.appendChild(svgEl("line", { class: "axis-line", x1: zeroX, x2: zeroX, y1: 0, y2: data.length * rowH - 6 }));
+
+    data.forEach((d, i) => {
+      const val = opts.value(d);
+      const barW = (Math.abs(val) / maxAbs) * zeroX;
+      const isPos = val >= 0;
+      const x = isPos ? zeroX : zeroX - barW;
+      const y = i * rowH;
+      const fill = isPos ? color("--series-6") : color("--series-1");
+
+      const nameLabel = svgEl("text", { class: "axis-label", x: -10, y: y + rowH / 2 - 6 + 4, "text-anchor": "end" });
+      nameLabel.textContent = opts.label(d);
+      g.appendChild(nameLabel);
+
+      const rect = svgEl("rect", {
+        class: "bar-mark", x: x, y: y - rowH / 2 + 2, width: Math.max(barW, 2), height: 16,
+        rx: 4, ry: 4, fill: fill,
+      });
+      rect.addEventListener("pointermove", (e) => showTip(e, opts.tooltip(d)));
+      rect.addEventListener("pointerleave", hideTip);
+      g.appendChild(rect);
+
+      const labelX = isPos ? x + barW + 6 : x - 6;
+      const valLabel = svgEl("text", { class: "val-label", x: labelX, y: y + rowH / 2 - 6 + 4, "text-anchor": isPos ? "start" : "end" });
+      valLabel.textContent = (val > 0 ? "+" : "") + val.toFixed(2);
+      g.appendChild(valLabel);
+    });
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+  }
+
+  // ---------- Heatmap ----------
+  function renderHeatmap(containerId, seg, opts) {
+    const container = document.getElementById(containerId);
+    const rows = seg.rows, cols = seg.cols;
+    const width = container.clientWidth || 640;
+    const cellW = Math.min(220, (width - 120) / cols.length);
+    const cellH = 78;
+    const margin = { top: 10, left: 110 };
+    const height = rows.length * cellH + margin.top + 30;
+
+    const vals = Object.values(seg.cells).map((c) => c.margin);
+    const maxAbs = Math.max(...vals.map(Math.abs));
+
+    function cellColor(v) {
+      const t = Math.min(Math.abs(v) / maxAbs, 1);
+      const pole = v >= 0 ? hexToRgb(color("--series-1")) : hexToRgb(color("--series-6"));
+      const mid = hexToRgb(color("--neutral-mid"));
+      const rgb = mid.map((m, i) => Math.round(m + (pole[i] - m) * t));
+      return "rgb(" + rgb.join(",") + ")";
+    }
+
+    const svg = svgEl("svg", { width: "100%", height: height, viewBox: "0 0 " + width + " " + height });
+    const g = svgEl("g", { transform: "translate(" + margin.left + "," + margin.top + ")" });
+    svg.appendChild(g);
+
+    cols.forEach((c, ci) => {
+      const t = svgEl("text", { class: "axis-label", x: ci * cellW + cellW / 2, y: -8, "text-anchor": "middle" });
+      t.textContent = c;
+      g.appendChild(t);
+    });
+
+    rows.forEach((r, ri) => {
+      const t = svgEl("text", { class: "axis-label", x: -10, y: ri * cellH + cellH / 2 + 4, "text-anchor": "end" });
+      t.textContent = r;
+      g.appendChild(t);
+
+      cols.forEach((c, ci) => {
+        const cell = seg.cells[r + "|" + c];
+        const x = ci * cellW + 2, y = ri * cellH + 2;
+        const grp = svgEl("g", { class: "heat-cell" });
+        const rect = svgEl("rect", { x: x, y: y, width: cellW - 4, height: cellH - 4, rx: 8, fill: cellColor(cell.margin) });
+        grp.appendChild(rect);
+
+        const isDark = t2 => {
+          const rgbMatch = /rgb\((\d+),(\d+),(\d+)\)/.exec(t2);
+          if (!rgbMatch) return false;
+          const [, r1, g1, b1] = rgbMatch.map(Number);
+          return (0.299 * r1 + 0.587 * g1 + 0.114 * b1) < 140;
+        };
+        const fillColor = cellColor(cell.margin);
+        const textColor = isDark(fillColor) ? "#ffffff" : "#0b0b0b";
+
+        const val = svgEl("text", { class: "heat-label", x: x + (cellW - 4) / 2, y: y + (cellH - 4) / 2 - 6, fill: textColor });
+        val.textContent = fmtMoney(cell.margin);
+        grp.appendChild(val);
+        const sub = svgEl("text", { class: "heat-sub", x: x + (cellW - 4) / 2, y: y + (cellH - 4) / 2 + 12, fill: textColor, opacity: 0.85 });
+        sub.textContent = fmtNum(cell.n) + " loans";
+        grp.appendChild(sub);
+
+        grp.addEventListener("pointermove", (e) => showTip(e,
+          '<div class="t-lbl">' + r + " / " + c + '</div>' +
+          '<div class="t-val">' + fmtMoney(cell.margin) + " margin</div>" +
+          '<div>' + fmtNum(cell.n) + ' loans, ' + cell.defaultRate + '% default rate</div>'
+        ));
+        grp.addEventListener("pointerleave", hideTip);
+        g.appendChild(grp);
+      });
+    });
+
+    container.innerHTML = "";
+    container.appendChild(svg);
+  }
+
+  // ---------- Table twins ----------
+  function buildTable(id, headers, rows) {
+    const table = document.getElementById(id);
+    let html = "<thead><tr>" + headers.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>";
+    rows.forEach((r) => { html += "<tr>" + r.map((c) => "<td></td>").join("").replace(/<td><\/td>/g, () => "") ; });
+    table.innerHTML = "<thead><tr>" + headers.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
+      rows.map((r) => "<tr>" + r.map((c) => "<td>" + c + "</td>").join("") + "</tr>").join("") + "</tbody>";
+  }
+
+  document.querySelectorAll(".toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tbl = document.getElementById(btn.dataset.target);
+      const showing = tbl.style.display !== "none";
+      tbl.style.display = showing ? "none" : "table";
+      btn.textContent = showing ? "View as table" : "Hide table";
+    });
+  });
+
+  function renderAll() {
+    renderKPIs();
+
+    renderBarChart("chart-grade", DATA.grade, {
+      value: (d) => d.rate,
+      label: (d) => d.grade,
+      color: color("--series-1"),
+      tooltip: (d) => '<div class="t-lbl">Grade ' + d.grade + '</div><div class="t-val">' + d.rate + '% default rate</div><div>' + fmtNum(d.defaulted) + " of " + fmtNum(d.completed) + " completed loans</div>",
+    });
+    buildTable("tbl-grade", ["Grade", "Completed loans", "Defaulted loans", "Default rate"],
+      DATA.grade.map((d) => [d.grade, fmtNum(d.completed), fmtNum(d.defaulted), d.rate + "%"]));
+
+    renderLineChart("chart-cohort-default", DATA.cohort, {
+      value: (d) => d.defaultRate, label: (d) => d.year, color: color("--series-1"), suffix: "%",
+      tooltip: (d) => '<div class="t-lbl">' + d.year + '</div><div class="t-val">' + d.defaultRate + '% default rate</div><div>' + fmtNum(d.completed) + " completed loans</div>",
+    });
+    renderLineChart("chart-cohort-completed", DATA.cohort, {
+      value: (d) => d.pctCompleted, label: (d) => d.year, color: color("--series-2"), suffix: "%",
+      tooltip: (d) => '<div class="t-lbl">' + d.year + '</div><div class="t-val">' + d.pctCompleted + '% of cohort completed</div><div>' + fmtNum(d.completed) + " of " + fmtNum(d.total) + " loans</div>",
+    });
+    buildTable("tbl-cohort", ["Year", "Total loans", "Completed", "Defaults", "Default rate", "% completed"],
+      DATA.cohort.map((d) => [d.year, fmtNum(d.total), fmtNum(d.completed), fmtNum(d.defaults), d.defaultRate + "%", d.pctCompleted + "%"]));
+
+    renderDivergingBar("chart-margin", DATA.margin, {
+      value: (d) => d.margin, label: (d) => d.grade,
+      fmtValue: fmtMoney, fmtAxis: fmtMoney,
+      tooltip: (d) => '<div class="t-lbl">Grade ' + d.grade + '</div><div class="t-val">' + fmtMoney(d.margin) + ' realized margin</div><div>' + fmtMoney(d.interest) + " collected − " + fmtMoney(d.loss) + " unrecovered loss</div>",
+    });
+    buildTable("tbl-margin", ["Grade", "Interest collected", "Unrecovered loss", "Realized margin"],
+      DATA.margin.map((d) => [d.grade, fmtMoney(d.interest), fmtMoney(d.loss), fmtMoney(d.margin)]));
+
+    renderHeatmap("chart-segment", DATA.segment, {});
+    const segRows = [];
+    DATA.segment.rows.forEach((r) => DATA.segment.cols.forEach((c) => {
+      const cell = DATA.segment.cells[r + "|" + c];
+      segRows.push([r, c, fmtNum(cell.n), cell.defaultRate + "%", fmtMoney(cell.margin)]);
+    }));
+    buildTable("tbl-segment", ["Risk tier", "Value tier", "Loans", "Default rate", "Realized margin"], segRows);
+
+    renderDivergingHBar("chart-feat", DATA.feature, {
+      value: (d) => d.coef, label: (d) => d.name,
+      tooltip: (d) => '<div class="t-lbl">' + d.name + '</div><div class="t-val">' + (d.coef > 0 ? "+" : "") + d.coef.toFixed(3) + '</div><div>' + (d.coef > 0 ? "Increases" : "Decreases") + " default likelihood</div>",
+    });
+    buildTable("tbl-feat", ["Feature", "Standardized coefficient"], DATA.feature.map((d) => [d.name, (d.coef > 0 ? "+" : "") + d.coef.toFixed(4)]));
+  }
+
+  renderAll();
+  let resizeTimer;
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 150); });
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+  new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
