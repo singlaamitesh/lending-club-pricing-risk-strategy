@@ -3,6 +3,8 @@
 A data analyst portfolio project analyzing 2.26M Lending Club loans to
 recommend segment-based pricing over blanket, grade-only pricing.
 
+**Live dashboard:** https://singlaamitesh.github.io/lending-club-pricing-risk-strategy/
+
 **Read first:** [`EXECUTIVE_SUMMARY.md`](EXECUTIVE_SUMMARY.md) — the
 one-page business summary with the key finding, recommendation, estimated
 impact, and sensitivity check.
@@ -74,6 +76,9 @@ High Value" segment runs a realized loss of $227.1M. See
 
 ## Dashboard
 
-Power BI visual specs (which chart, which fields) are in
-`notes/13-Phase7-Dashboard-And-Sensitivity.md`. Source CSVs are in
+A hand-built, self-contained HTML/SVG dashboard is deployed via GitHub
+Pages from `docs/index.html` (data embedded inline, no build step) —
+https://singlaamitesh.github.io/lending-club-pricing-risk-strategy/.
+The original Power BI visual spec (which chart, which fields) is in
+`notes/13-Phase7-Dashboard-And-Sensitivity.md`; source CSVs are in
 `data/processed/`.
